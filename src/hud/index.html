@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data: blob:;">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Speedometer</title>
+<style>
+  :root{
+    --size: 280px;          /* діаметр кола */
+    --thickness: 16px;      /* товщина дуги швидкості */
+    --accent: #00d1ff;      /* колір активної дуги */
+    --muted: rgba(255,255,255,.15);
+    --text: #ffffff;
+    --danger: #ff4d4d;
+  }
+  html, body {
+    margin: 0; padding: 0; background: transparent; overflow: hidden;
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  }
+  .wrap {
+    position: fixed; right: 48px; bottom: 48px;
+    width: var(--size); height: var(--size);
+    display: grid; place-items: center;
+    user-select: none; -webkit-user-select: none;
+    filter: drop-shadow(0 6px 16px rgba(0,0,0,.35));
+    transition: opacity .25s ease, transform .25s ease;
+    opacity: .0; transform: translateY(8px); /* сховано за замовчуванням */
+  }
+  .wrap.visible { opacity: 1; transform: translateY(0); }
+
+  svg { width: 100%; height: 100%; }
+
+  /* центральний блок з цифрами */
+  .center {
+    position: absolute; display: grid; place-items: center;
+    text-align: center; inset: 0;
+  }
+  .speed { font-size: 64px; font-weight: 700; color: var(--text); line-height: .9; }
+  .unit  { font-size: 14px; letter-spacing: .2em; text-transform: uppercase; opacity: .75; margin-top: 6px; color: var(--text); }
+  .gear  { position: absolute; bottom: 26px; font-size: 14px; color: var(--text); opacity: .7; }
+  .rpm   { position: absolute; top: 20px; font-size: 12px; color: var(--text); opacity: .7; letter-spacing: .1em; }
+
+  /* стрілка */
+  .needle {
+    transform-origin: 50% 50%;
+    transition: transform .08s linear; /* миттєвий відгук, але буде ще й rAF-гладіння */
+  }
+
+  /* дрібниці */
+  .tick { stroke: var(--muted); stroke-width: 2; }
+  .label { fill: var(--text); opacity: .55; font-size: 12px; }
+</style>
+</head>
+<body>
+  <div class="wrap" id="ui">
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <!-- фон шкали (півколо 300° → від -210° до +30°) -->
+      <defs>
+        <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="var(--accent)" stop-opacity=".35"/>
+          <stop offset="100%" stop-color="var(--accent)"/>
+        </linearGradient>
+      </defs>
+
+      <!-- базове кільце -->
+      <circle cx="50" cy="50" r="42"
+              fill="none" stroke="var(--muted)" stroke-width="10"
+              stroke-linecap="round"
+              stroke-dasharray="220" stroke-dashoffset="0"
+              transform="rotate(150 50 50)"/>
+
+      <!-- активна дуга швидкості -->
+      <circle id="arc" cx="50" cy="50" r="42"
+              fill="none" stroke="url(#grad)" stroke-width="10"
+              stroke-linecap="round"
+              stroke-dasharray="220" stroke-dashoffset="220"
+              transform="rotate(150 50 50)"/>
+
+      <!-- мітки кожні 20 км/год -->
+      <g id="ticks"></g>
+
+      <!-- стрілка -->
+      <g class="needle" id="needle" transform="rotate(150 50 50)">
+        <polygon points="50,14 49,52 51,52" fill="white"/>
+        <circle cx="50" cy="50" r="3" fill="white"/>
+      </g>
+    </svg>
+
+    <div class="center">
+      <div class="rpm" id="rpmText">RPM — 0</div>
+      <div class="speed"><span id="speedVal">0</span></div>
+      <div class="unit">km/h</div>
+      <div class="gear" id="gearText">D</div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const ui = document.getElementById('ui');
+  const arc = document.getElementById('arc');
+  const needle = document.getElementById('needle');
+  const speedVal = document.getElementById('speedVal');
+  const gearText = document.getElementById('gearText');
+  const rpmText = document.getElementById('rpmText');
+  const ticksGroup = document.getElementById('ticks');
+
+  // конфіг
+  const MAX_SPEED = 300;        // км/год
+  const START_ANGLE = 150;      // градусів (де починається шкала)
+  const SWEEP_ANGLE = 240;      // довжина дуги (хв. від -210° до +30° → тут 240° красиво)
+  const CIRC = 2 * Math.PI * 42; // довжина кола для stroke-dasharray
+
+  arc.setAttribute('stroke-dasharray', (CIRC * (SWEEP_ANGLE / 360)).toFixed(2));
+  arc.length = CIRC * (SWEEP_ANGLE / 360);
+
+  // мітки кожні 20 км/год
+  for (let s = 0; s <= MAX_SPEED; s += 20) {
+    const t = s / MAX_SPEED; // 0..1
+    const angle = (START_ANGLE + t * SWEEP_ANGLE) * Math.PI/180;
+    const rOuter = 42, rInner = 38;
+    const x1 = 50 + rInner * Math.cos(angle);
+    const y1 = 50 + rInner * Math.sin(angle);
+    const x2 = 50 + rOuter * Math.cos(angle);
+    const y2 = 50 + rOuter * Math.sin(angle);
+
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    line.setAttribute('class', 'tick');
+    ticksGroup.appendChild(line);
+
+    const lblR = 32;
+    const lx = 50 + lblR * Math.cos(angle);
+    const ly = 50 + lblR * Math.sin(angle) + 2;
+    const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    label.setAttribute('x', lx);
+    label.setAttribute('y', ly);
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('alignment-baseline', 'middle');
+    label.setAttribute('class', 'label');
+    label.textContent = s;
+    ticksGroup.appendChild(label);
+  }
+
+  // плавне згладжування значень
+  let currentSpeed = 0;
+  let targetSpeed = 0;
+  let currentRPM = 0;
+  let targetRPM = 0;
+  let currentGear = 'D';
+
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+  function setSpeed(kmh) {
+    targetSpeed = clamp(kmh, 0, MAX_SPEED);
+    ui.classList.toggle('visible', targetSpeed > 0.1); // показувати тільки коли рухаємось/в авто
+  }
+  function setRPM(rpm) { targetRPM = clamp(rpm, 0, 9000); }
+  function setGear(g)  { currentGear = g || 'D'; }
+
+  function draw() {
+    // інерція/пружинка
+    currentSpeed += (targetSpeed - currentSpeed) * 0.15;
+    currentRPM   += (targetRPM   - currentRPM)   * 0.18;
+
+    // оновлення тексту
+    speedVal.textContent = Math.round(currentSpeed);
+    rpmText.textContent = 'RPM — ' + Math.round(currentRPM);
+    gearText.textContent = currentGear;
+
+    // оновлення дуги
+    const t = clamp(currentSpeed / MAX_SPEED, 0, 1);
+    const dash = arc.length * (1 - t);
+    arc.setAttribute('stroke-dashoffset', dash.toFixed(2));
+
+    // оновлення стрілки
+    const angle = START_ANGLE + t * SWEEP_ANGLE;
+    needle.setAttribute('transform', `rotate(${angle} 50 50)`);
+
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+
+  // прийом з клієнтського JS
+  window.addEventListener('message', (e) => {
+    const d = e.data || {};
+    if (d.type === 'updateSpeed') setSpeed(Number(d.value) || 0);
+    if (d.type === 'updateRPM')   setRPM(Number(d.value) || 0);
+    if (d.type === 'updateGear')  setGear(d.value);
+  });
+
+  // для ручного тесту у браузері (опц.)
+  if (!window.mp) {
+    let demo = 0, dir = 1;
+    setInterval(() => {
+      demo += dir * 6;
+      if (demo > 220) dir = -1;
+      if (demo < 0)   dir = 1;
+      window.postMessage({ type:'updateSpeed', value: demo }, '*');
+      window.postMessage({ type:'updateRPM', value: 800 + demo*25 }, '*');
+      window.postMessage({ type:'updateGear', value: demo < 5 ? 'N' : 'D' }, '*');
+    }, 80);
+  }
+})();
+</script>
+</body>
+</html>

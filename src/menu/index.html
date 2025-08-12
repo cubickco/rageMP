@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8" />
+  <title>Меню персонажа</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="panel">
+    <h1>Меню персонажа</h1>m
+
+    <div id="stats">
+      <div><b>Ім'я:</b> <span id="st-name">—</span></div>
+			<div><b>Рівень:</b> <span id="st-level">—</span></div>
+      <div><b>HP:</b> <span id="st-hp">—</span></div>
+			<div><b>Голод:</b> <span id="st-hunger">—</span></div>
+			<div><b>Спрага:</b> <span id="st-thirst">—</span></div>
+			<div><b>Гроші:</b> <span id="st-money">—</span></div>
+      <div><b>Броня:</b> <span id="st-armour">—</span></div>
+			<div><b>Права:</b> <span id="st-permissions">—</span></div>
+    </div>
+
+    <div class="actions">
+      <button onclick="mp.trigger('ui:heal')">Вилікувати</button>
+      <button onclick="mp.trigger('ui:spawn','sultan')">Спавн Sultan</button>
+      <button class="ghost" onclick="mp.trigger('ui:close')">Закрити (M)</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
