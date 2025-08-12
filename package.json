@@ -11,8 +11,10 @@
   "devDependencies": {
     "browser-sync": "^3.0.4",
     "del": "^8.0.0",
+    "esbuild": "^0.25.8",
     "gulp": "^5.0.1",
     "gulp-clean-css": "^4.3.0",
+    "gulp-esbuild": "^0.14.1",
     "gulp-imagemin": "^9.1.0",
     "gulp-newer": "^1.4.0",
     "gulp-notify": "^5.0.0",
